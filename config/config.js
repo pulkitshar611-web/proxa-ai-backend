@@ -85,6 +85,11 @@ db.supplier_rating = require("../src/model/supplier_model/supplier_rating.model"
 db.costSaving = require("../src/model/costSaving_model/costSaving.model")(sequelize, DataTypes)
 db.license = require("../src/model/license_model/license.model")(sequelize, DataTypes)
 db.notification = require("../src/model/notification_model/notification.model")(sequelize, DataTypes)
+
+// New Models for Client License and Inventory
+db.client_license = require("../src/model/license_model/client_license.model")(sequelize, DataTypes)
+db.client_license_assignment = require("../src/model/license_model/client_license_assignment.model")(sequelize, DataTypes)
+db.inventory = require("../src/model/inventory_model/inventory.model")(sequelize, DataTypes)
 require('./association')(db);
 // db.sequelize.sync({ alter: false });
 

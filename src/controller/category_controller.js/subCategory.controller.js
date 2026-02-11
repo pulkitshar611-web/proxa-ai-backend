@@ -61,11 +61,11 @@
 
 
 const db = require("../../../config/config");
-const subcategory  = db.subcategories; 
+const subcategory = db.subcategories;
 
 // Add a new subcategory
 const add_subcategory = async (req, res) => {
-    const userId  = req.user.id;
+  const userId = req.user.id;
   try {
     const { categoryId, name, description } = req.body;
 
@@ -74,7 +74,7 @@ const add_subcategory = async (req, res) => {
     }
 
     const newSubcategory = await subcategory.create({
-      categoryId, 
+      categoryId,
       name,
       description,
       userId
@@ -113,6 +113,7 @@ const add_subcategory = async (req, res) => {
 const get_sub_categories = async (req, res) => {
   try {
     const { categoryId } = req.query;
+    const userId = req.user.id;
 
     // Validation
     if (!categoryId) {
@@ -121,9 +122,9 @@ const get_sub_categories = async (req, res) => {
       });
     }
 
-    // Fetch subcategories by categoryId
+    // Fetch subcategories by categoryId and userId
     const subcategories = await subcategory.findAll({
-      where: { categoryId },
+      where: { categoryId, userId },
       order: [["name", "ASC"]], // optional but recommended
     });
 
@@ -141,6 +142,6 @@ const get_sub_categories = async (req, res) => {
 
 
 module.exports = {
-    add_subcategory,
-    get_sub_categories
+  add_subcategory,
+  get_sub_categories
 };

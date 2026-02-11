@@ -57,7 +57,7 @@
 //                 departmentUserId: departmentUser.id,
 //                 userId:departmentUser.id
 //             });
-    
+
 
 //         }
 //         const find_pass = users.password
@@ -104,7 +104,7 @@
 //             let connection;
 //             try {
 //                 connection = await pool.getConnection();
-                
+
 //                 // Check for active license linked to this admin
 //                 const [licenses] = await connection.execute(
 //                     `SELECT * FROM licenses 
@@ -150,7 +150,7 @@
 //                 // License is valid, proceed with login
 //                 // Set flag to indicate license is assigned (for frontend routing)
 //                 const licenseAssigned = licenses.length > 0;
-                
+
 //                 const access_token = tokenProcess.generateAccessToken(users);
 //                 const refresh_token = tokenProcess.generateRefreshToken(users);
 //                 const refreshTokenExpiration = Date.now() + 2 * 24 * 60 * 60 * 1000;
@@ -230,7 +230,7 @@ exports.login = async (req, res) => {
 
     // Check User table first
     const user = await User.findOne({ where: { email_id: trimmedEmail } });
-    
+
     if (!user) {
       // Check Department table as fallback
       const departmentUser = await Department.findOne({ where: { email_id: trimmedEmail } });
@@ -257,13 +257,31 @@ exports.login = async (req, res) => {
       departmentUser.refreshToken_Expiration = refreshTokenExpiration;
       await departmentUser.save();
 
+      // Robustly parse permissions field into an array of strings
+      let rawPermissions = departmentUser.permissions || [];
+      let parsedPermissions = [];
+
+      if (typeof rawPermissions === "string") {
+        try {
+          const parsed = JSON.parse(rawPermissions);
+          parsedPermissions = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          parsedPermissions = rawPermissions.split(",").map(p => p.trim());
+        }
+      } else if (Array.isArray(rawPermissions)) {
+        parsedPermissions = rawPermissions;
+      }
+
+      // Ensure each item in the array is a string (name)
+      parsedPermissions = parsedPermissions.map(p => typeof p === "object" ? p.name : p).filter(Boolean);
+
       return res.status(200).json({
         status: true,
         message: "Login successful",
         access_token,
         refresh_token,
         userType: departmentUser.userType,
-        permissions: departmentUser.permissions,
+        permissions: parsedPermissions, // Send parsed array
         adminId: departmentUser.userId,
         departmentUserId: departmentUser.id,
         userId: departmentUser.id,

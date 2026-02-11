@@ -691,11 +691,49 @@ exports.updateExpiryDate = async (req, res) => {
 // GET /api/license/analytics
 exports.getLicenseAnalytics = async (req, res) => {
   try {
-    const total = await License.count();
-    const used = await License.count({ where: { status: "active", is_active: true } });
-    const unused = await License.count({ where: { status: "unused" } });
+    const isSuperAdmin = req.user.userType === "superadmin";
+    const isAdmin = req.user.userType === "admin";
 
-    const departments = await db.department.findAll();
+    let departmentEmail = null;
+    let targetDept = null;
+
+    if (isAdmin) {
+      targetDept = await db.department.findOne({ where: { userId: req.user.id } });
+      if (targetDept) departmentEmail = targetDept.email_id;
+    }
+
+    // If Admin but no department found, return empty stats
+    if (isAdmin && !departmentEmail) {
+      return res.status(200).json({
+        status: true,
+        data: { total: 0, used: 0, unused: 0, departmentWise: [] },
+        message: "No department associated with this account"
+      });
+    }
+
+    const whereClause = isSuperAdmin ? {} : { assigned_email: departmentEmail };
+
+    const total = await License.count({ where: isSuperAdmin ? {} : { [db.Sequelize.Op.and]: [whereClause, { [db.Sequelize.Op.not]: { assigned_email: null } }] } });
+    const used = await License.count({
+      where: {
+        ...whereClause,
+        status: "active",
+        is_active: true
+      }
+    });
+
+    // For unused, if not superadmin, we only count those assigned to their email but still unused
+    const unused = await License.count({
+      where: {
+        ...whereClause,
+        status: "unused"
+      }
+    });
+
+    const departments = isSuperAdmin
+      ? await db.department.findAll()
+      : (targetDept ? [targetDept] : []);
+
     const departmentWise = await Promise.all(departments.map(async (dept) => {
       const deptTotal = await License.count({ where: { assigned_email: dept.email_id } });
       const deptUsed = await License.count({
@@ -715,7 +753,7 @@ exports.getLicenseAnalytics = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      data: { total, used, unused, departmentWise },
+      data: { total: isSuperAdmin ? await License.count() : total, used: isSuperAdmin ? await License.count({ where: { status: "active", is_active: true } }) : used, unused: isSuperAdmin ? await License.count({ where: { status: "unused" } }) : unused, departmentWise },
       message: "License analytics retrieved successfully"
     });
   } catch (error) {
@@ -727,12 +765,39 @@ exports.getLicenseAnalytics = async (req, res) => {
 // GET /api/license/insights
 exports.getLicenseInsights = async (req, res) => {
   try {
+    const isSuperAdmin = req.user.userType === "superadmin";
+    const isAdmin = req.user.userType === "admin";
+
+    let departmentEmail = null;
+    let targetDept = null;
+
+    if (isAdmin) {
+      targetDept = await db.department.findOne({ where: { userId: req.user.id } });
+      if (targetDept) departmentEmail = targetDept.email_id;
+    }
+
+    if (isAdmin && !departmentEmail) {
+      return res.status(200).json({
+        status: true,
+        data: { underutilizedLicenses: [], lowUtilizationDepartments: [] },
+        message: "No department associated with this account"
+      });
+    }
+
+    const whereClause = isSuperAdmin ? {} : { assigned_email: departmentEmail };
+
     const underutilizedLicenses = await License.findAll({
-      where: { status: "unused" },
+      where: {
+        ...whereClause,
+        status: "unused"
+      },
       limit: 10
     });
 
-    const departments = await db.department.findAll();
+    const departments = isSuperAdmin
+      ? await db.department.findAll()
+      : (targetDept ? [targetDept] : []);
+
     const deptStats = await Promise.all(departments.map(async (dept) => {
       const total = await License.count({ where: { assigned_email: dept.email_id } });
       const used = await License.count({

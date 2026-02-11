@@ -36,7 +36,7 @@ module.exports = (db) => {
         foreignKey: 'requestId', // or whatever the correct field name is
         as: 'requesdetails',
     });
-    
+
     // In intake_request_approvers model
     db.intake_request.hasMany(db.intake_request_comment, {
         foreignKey: 'requestId',
@@ -261,33 +261,33 @@ module.exports = (db) => {
         as: 'assignIntakeRequest',
     });
 
-//////////////////////multi year contarct///////////////////////////////
+    //////////////////////multi year contarct///////////////////////////////
 
-db.multi_year_contracting.belongsTo(db.supplier, {
-    foreignKey: 'supplierId',
-    as: 'supplier',
-});
+    db.multi_year_contracting.belongsTo(db.supplier, {
+        foreignKey: 'supplierId',
+        as: 'supplier',
+    });
 
-db.supplier.hasOne(db.multi_year_contracting, {
-    foreignKey: 'supplierId',
-    as: 'multi_year_contracting',
-});
+    db.supplier.hasOne(db.multi_year_contracting, {
+        foreignKey: 'supplierId',
+        as: 'multi_year_contracting',
+    });
 
 
-/////////////price comparison////////////////////////////////////////
+    /////////////price comparison////////////////////////////////////////
 
-db.price_comparison.belongsTo(db.supplier, {
-    foreignKey: 'recommendedSupplierId',
-    as: 'supplier',
-});
+    db.price_comparison.belongsTo(db.supplier, {
+        foreignKey: 'recommendedSupplierId',
+        as: 'supplier',
+    });
 
-db.supplier.hasOne(db.price_comparison, {
-    foreignKey: 'recommendedSupplierId',
-    as: 'price_comparison',
-});
-// ================= LICENSE ASSOCIATION (SUPERADMIN MODULE) =================
+    db.supplier.hasOne(db.price_comparison, {
+        foreignKey: 'recommendedSupplierId',
+        as: 'price_comparison',
+    });
+    // ================= LICENSE ASSOCIATION (SUPERADMIN MODULE) =================
 
- db.user.hasOne(db.license, {
+    db.user.hasOne(db.license, {
         foreignKey: 'admin_id',
         as: 'license',
     });
@@ -295,6 +295,30 @@ db.supplier.hasOne(db.price_comparison, {
     db.license.belongsTo(db.user, {
         foreignKey: 'admin_id',
         as: 'admin',
+    });
+
+    // ================ CLIENT LICENSE ASSOCIATION ================
+    db.client_license.belongsTo(db.department, {
+        foreignKey: 'department_id',
+        as: 'department',
+    });
+    db.department.hasMany(db.client_license, {
+        foreignKey: 'department_id',
+        as: 'clientLicenses',
+    });
+
+    db.client_license.hasMany(db.client_license_assignment, {
+        foreignKey: 'client_license_id',
+        as: 'assignments',
+    });
+    db.client_license_assignment.belongsTo(db.client_license, {
+        foreignKey: 'client_license_id',
+        as: 'license',
+    });
+
+    db.client_license_assignment.belongsTo(db.user, {
+        foreignKey: 'user_id',
+        as: 'user',
     });
 };
 
