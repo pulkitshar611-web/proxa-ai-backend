@@ -89,6 +89,9 @@ const renew_contract_from_template = async (req, res) => {
             contractAttachmentFile: null, // Can generate PDF here
         });
 
+        // 6. Update original contract status to 'Renewed'
+        await originalContract.update({ status: 'Renewed' });
+
         return res.status(201).json({
             success: true,
             message: 'Contract renewed successfully',
@@ -213,7 +216,7 @@ const preview_renewed_contract = async (req, res) => {
  */
 const get_contracts_expiring_soon = async (req, res) => {
     try {
-        const { days = 30 } = req.query;
+        const { days = 60 } = req.query; // Increase default to 60 as per UI
         const userId = req.user.id;
         const userType = req.user.userType;
 
@@ -254,18 +257,65 @@ const get_contracts_expiring_soon = async (req, res) => {
             };
         });
 
+        // --- CALCULATE ANALYTICS ---
+
+        // 1. Total Expiring (within specified days)
+        const totalExpiring = expiringContracts.length;
+
+        // 2. Renewed (MTD) - Contracts renewed in the current month
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        let renewedWhere = {
+            status: 'Renewed',
+            updatedAt: { [db.Sequelize.Op.gte]: startOfMonth }
+        };
+        if (userType !== 'superadmin') renewedWhere.userId = userId;
+        const renewedThisMonth = await Contract.count({ where: renewedWhere });
+
+        // 3. Critical Actions (Expiring within 7 days)
+        const criticalActions = contractsWithExpiry.filter(c => c.daysUntilExpiry <= 7).length;
+
+        // 4. Potential Savings (Sum of budgets for expiring contracts - simplified model)
+        const savingsSum = expiringContracts.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) * 0.1; // Estimate 10% savings
+        const potentialSavings = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(savingsSum);
+
+        // 5. Distribution by Department
+        const distributionMap = {};
+        expiringContracts.forEach(c => {
+            const deptName = c.department?.name || 'Other';
+            distributionMap[deptName] = (distributionMap[deptName] || 0) + 1;
+        });
+
+        const totalForDist = Object.values(distributionMap).reduce((a, b) => a + b, 0);
+        const distribution = Object.keys(distributionMap).map(name => ({
+            name,
+            percentage: Math.round((distributionMap[name] / totalForDist) * 100) || 0
+        })).sort((a, b) => b.percentage - a.percentage);
+
+        // 6. Completion Rate (Renewed vs Total)
+        const totalRelevant = renewedThisMonth + totalExpiring;
+        const completionRate = totalRelevant > 0 ? Math.round((renewedThisMonth / totalRelevant) * 100) : 0;
+
         return res.status(200).json({
             success: true,
-            message: 'Expiring contracts fetched successfully',
+            message: 'Expiring contracts and analytics fetched successfully',
             data: contractsWithExpiry,
-            count: contractsWithExpiry.length
+            analytics: {
+                totalExpiring,
+                renewedThisMonth,
+                criticalActions,
+                potentialSavings,
+                completionRate
+            },
+            distribution,
+            count: totalExpiring
         });
 
     } catch (error) {
         console.error('Error fetching expiring contracts:', error);
         return res.status(500).json({
             success: false,
-            message: 'Failed to fetch expiring contracts'
+            message: 'Failed to fetch expiring contracts',
+            error: error.message
         });
     }
 };

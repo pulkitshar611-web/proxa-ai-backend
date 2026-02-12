@@ -541,9 +541,75 @@ const delete_renewal_request = async (req, res) => {
     }
 };
 
+// Process renewal request (convert to active contract)
+const process_renewal_request = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const renewalRequest = await renewal_request.findByPk(id, {
+            include: [{ model: Contract, as: 'contract' }]
+        });
+
+        if (!renewalRequest) {
+            return res.status(404).json({
+                status: false,
+                message: 'Renewal request not found'
+            });
+        }
+
+        const originalContract = renewalRequest.contract;
+        if (!originalContract) {
+            return res.status(404).json({
+                status: false,
+                message: 'Original contract not found'
+            });
+        }
+
+        // Create renewed contract
+        const renewedContract = await Contract.create({
+            contractName: `${originalContract.contractName} - Renewed (Manual)`,
+            description: renewalRequest.description || originalContract.description,
+            contractTypeId: originalContract.contractTypeId,
+            departmentId: renewalRequest.selectDepartment || originalContract.departmentId,
+            startDate: renewalRequest.previousExpirationDate || new Date(),
+            endDate: renewalRequest.newExpirationDate,
+            sourceLeadName: originalContract.sourceLeadName,
+            sourceDirectorName: originalContract.sourceDirectorName,
+            buisnessStackHolder: originalContract.buisnessStackHolder,
+            supplierId: originalContract.supplierId,
+            budget: renewalRequest.contractPrice || originalContract.budget,
+            currency: originalContract.currency,
+            paymentTerms: originalContract.paymentTerms,
+            milestones: originalContract.milestones,
+            contractAttachmentFile: renewalRequest.renewalAttachmentFile,
+            userId: req.user.id,
+            status: 'Active'
+        });
+
+        // Update original contract status
+        await originalContract.update({ status: 'Renewed' });
+
+        // Update renewal request status
+        await renewalRequest.update({ status: 'Processed' });
+
+        return res.status(200).json({
+            status: true,
+            message: 'Renewal request processed and contract created successfully',
+            data: renewedContract
+        });
+    } catch (error) {
+        console.error('Error processing renewal request:', error);
+        return res.status(500).json({
+            status: false,
+            message: 'Failed to process renewal request',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     add_renewal_request,
     get_all_renewal_requests,
     update_renewal_request,
     delete_renewal_request,
+    process_renewal_request
 };

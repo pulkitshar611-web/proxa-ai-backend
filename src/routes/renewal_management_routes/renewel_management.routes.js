@@ -22,13 +22,15 @@ const {
   add_renewal_request,
   get_all_renewal_requests,
   update_renewal_request,
-  delete_renewal_request
+  delete_renewal_request,
+  process_renewal_request
 } = require("../../controller/renewal_management_controller/renewal_management.controller");
 
 // 🔐 Har route protected karein
 router.post("/add_renewal_request", authorize, uploads.single("renewalAttachmentFile"), add_renewal_request);
 router.post("/update_add_renewal_request/:id", authorize, uploads.single("renewalAttachmentFile"), add_renewal_request);
 router.get("/get_all_renewal_requests", authorize, get_all_renewal_requests); // ✅ added authorize
+router.post("/process_renewal_request/:id", authorize, process_renewal_request);
 router.patch(
   "/update_renewal_request/:id",
   authorize,
