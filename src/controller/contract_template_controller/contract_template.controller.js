@@ -233,6 +233,18 @@ const delete_contract_template = async (req, res) => {
       });
     }
 
+    // Check if any contracts are using this template
+    const contractCount = await db.contract.count({
+      where: { agreementId: id }
+    });
+
+    if (contractCount > 0) {
+      return res.status(400).json({
+        status: false,
+        message: `Cannot delete this template because it is currently linked to ${contractCount} active contract(s). Please reassign or delete the contracts first.`,
+      });
+    }
+
     await template.destroy();
 
     return res.status(200).json({

@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
       autoIncrement: true
     },
     contractType: {
-      type: DataTypes.JSON, 
+      type: DataTypes.JSON,
       allowNull: false,
     },
     remindBeforeDays: {

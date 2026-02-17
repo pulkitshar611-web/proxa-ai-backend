@@ -38,17 +38,17 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       defaultValue: "Pending Renewal",
     },
-    vendorName:{
+    vendorName: {
       type: DataTypes.STRING,
       allowNull: true,
 
     },
-    contractPrice:{
+    contractPrice: {
       type: DataTypes.STRING,
       allowNull: true,
 
     },
-    addService:{
+    addService: {
       type: DataTypes.STRING,
       allowNull: true,
 

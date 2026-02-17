@@ -13,107 +13,131 @@ const get_dashboard_data = async (req, res) => {
         const userType = req.user?.userType;
         const userId = req.user?.id;
         const isSuperAdmin = userType === 'superadmin';
-        
+
         // Build where clause for Admin users (filter by userId)
         const adminWhereClause = isSuperAdmin ? {} : { userId: userId };
-        
+
         const endDate = new Date();
-        const startDate = new Date();
-        startDate.setMonth(endDate.getMonth() - 5); // Last 6 months (including current month)
+        const startOfSixMonths = new Date();
+        startOfSixMonths.setMonth(endDate.getMonth() - 5); // Last 6 months
 
-        // Get total transaction count (filtered for Admin users)
-        const totalTransactions = await Transaction.count({
-            where: adminWhereClause
-        });
-
-        // Get unique suppliers count (filtered for Admin users)
+        // 1. Summary Counts
+        const totalTransactions = await Transaction.count({ where: adminWhereClause });
         const uniqueSuppliers = await Transaction.count({
             distinct: true,
             col: "supplierId",
             where: adminWhereClause
         });
-
-        // Build where clause for transactions with date filter
-        const transactionWhereClause = {
-            dateOfTransaction: {
-                [Op.gte]: startDate,
-                [Op.lte]: endDate,
+        const totalIntakeRequests = await IntakeRequest.count({ where: adminWhereClause });
+        const projectsCompleted = await IntakeRequest.count({
+            where: { ...adminWhereClause, status: 'approved' }
+        });
+        const projectsActive = await IntakeRequest.count({
+            where: { ...adminWhereClause, status: 'active' }
+        });
+        const expiringContractsCount = await Contract.count({
+            where: {
+                endDate: { [Op.between]: [moment().toDate(), moment().add(30, 'days').toDate()] },
+                ...(isSuperAdmin ? {} : { userId: userId })
             },
-            ...(isSuperAdmin ? {} : { userId: userId })
-        };
+        });
 
-        // Fetch top 5 suppliers by total transaction amount (filtered for Admin users)
+        // 2. Top Suppliers (Bar Chart Data)
         const topSuppliers = await Transaction.findAll({
             attributes: [
                 "supplierId",
                 [Sequelize.fn("SUM", Sequelize.col("amount")), "totalAmount"],
             ],
-            include: [
-                {
-                    model: Supplier,
-                    as: "supplier",
-                    attributes: ["name"],
-                },
-            ],
-            where: transactionWhereClause,
-            group: ["supplierId", "supplier.name"], // Group correctly
+            include: [{ model: Supplier, as: "supplier", attributes: ["name"] }],
+            where: { ...adminWhereClause },
+            group: ["supplierId", "supplier.name"],
             order: [[Sequelize.fn("SUM", Sequelize.col("amount")), "DESC"]],
             limit: 5,
-            raw: true, // Ensure clean results
+            raw: true,
         });
 
-        const barGraphData = topSuppliers.map((supplierData) => ({
-            topSupplier: supplierData["supplier.name"], // Access nested object properly
-            totalAmount: parseFloat(supplierData.totalAmount),
+        const barGraphData = topSuppliers.map((s) => ({
+            topSupplier: s["supplier.name"],
+            totalAmount: parseFloat(s.totalAmount),
         }));
 
-        // Fetch total spend per category for each month (filtered for Admin users)
+        // 3. Spend Dashboard - Monthly (Last 6 Months)
         const monthlyCategoryData = await Transaction.findAll({
             attributes: [
-                [Sequelize.fn("DATE_FORMAT", Sequelize.col("dateOfTransaction"), "%b %Y"), "month"], // "Jan 2025"
+                [Sequelize.fn("DATE_FORMAT", Sequelize.col("dateOfTransaction"), "%b %Y"), "month"],
                 [Sequelize.fn("SUM", Sequelize.col("amount")), "totalAmount"],
                 [Sequelize.col("category.name"), "categoryName"],
             ],
-            include: [
-                {
-                    model: Category,
-                    as: "category",
-                    attributes: [],
-                },
-            ],
-            where: transactionWhereClause,
-            group: ["month", "categoryId", "category.name"], // Ensure category grouping is correct
-            order: [[Sequelize.fn("MIN", Sequelize.col("dateOfTransaction")), "ASC"]], // Order by the earliest date in the selected range
-            raw: true, // Get plain results
-        });
-
-        // Fetch total intake requests (filtered for Admin users)
-        const totalIntakeRequests = await IntakeRequest.count({
-            where: adminWhereClause
-        });
-
-        // Fetch total contracts expiring soon (next 30 days) (filtered for Admin users)
-        const expiringContracts = await Contract.count({
+            include: [{ model: Category, as: "category", attributes: [] }],
             where: {
-                endDate: {  // Use the correct column name if needed
-                    [Op.between]: [moment().toDate(), moment().add(30, 'days').toDate()],
-                },
+                ...adminWhereClause,
+                dateOfTransaction: { [Op.between]: [startOfSixMonths, endDate] }
+            },
+            group: ["month", "categoryId", "category.name"],
+            order: [[Sequelize.fn("MIN", Sequelize.col("dateOfTransaction")), "ASC"]],
+            raw: true,
+        });
+
+        // 4. Spend Dashboard - Yearly (Current Year)
+        const yearlyCategoryData = await Transaction.findAll({
+            attributes: [
+                [Sequelize.fn("SUM", Sequelize.col("amount")), "totalAmount"],
+                [Sequelize.col("category.name"), "categoryName"],
+            ],
+            include: [{ model: Category, as: "category", attributes: [] }],
+            where: {
+                ...adminWhereClause,
+                dateOfTransaction: {
+                    [Op.between]: [moment().startOf('year').toDate(), moment().endOf('year').toDate()]
+                }
+            },
+            group: ["categoryId", "category.name"],
+            raw: true,
+        });
+
+        // 5. Coming Renewals in next 6 months (Detailed List Grouped by Department)
+        const sixMonthsFromNow = moment().add(6, 'months').toDate();
+        const comingRenewalsDetails = await Contract.findAll({
+            where: {
+                endDate: { [Op.between]: [moment().toDate(), sixMonthsFromNow] },
                 ...(isSuperAdmin ? {} : { userId: userId })
             },
+            attributes: ['id', 'contractName', 'endDate'],
+            include: [
+                { model: db.department, as: "department", attributes: ["name"] },
+                { model: Supplier, as: "supplier", attributes: ["name"] }
+            ],
+            order: [['endDate', 'ASC']],
+            raw: true
         });
+
+        // Transform renewal data for easier frontend grouping
+        const formattedRenewals = comingRenewalsDetails.map(r => ({
+            id: r.id,
+            contractName: r.contractName,
+            endDate: r.endDate,
+            departmentName: r["department.name"],
+            supplierName: r["supplier.name"]
+        }));
+
         return res.status(200).json({
             status: true,
             message: "Dashboard analytics fetched successfully",
             summary: {
                 totalSpendCount: totalTransactions,
                 totalSupplierCount: uniqueSuppliers,
-                totalIntakeRequests: totalIntakeRequests, // Added total intake requests count
-                totalExpiringContracts: expiringContracts, // Added expiring contracts count
+                totalIntakeRequests: totalIntakeRequests,
+                totalExpiringContracts: expiringContractsCount,
+                projectsCompleted: projectsCompleted,
+                projectsActive: projectsActive,
             },
             topSuppliers: barGraphData,
-            categoryData: monthlyCategoryData,
+            categoryDataMonthly: monthlyCategoryData,
+            categoryDataYearly: yearlyCategoryData,
+            comingRenewals: formattedRenewals
         });
     } catch (error) {
+        console.error("Dashboard error:", error);
         return res.status(500).json({
             status: false,
             message: error.message,

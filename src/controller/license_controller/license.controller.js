@@ -744,7 +744,9 @@ exports.getLicenseAnalytics = async (req, res) => {
         }
       });
       return {
+        departmentId: dept.id,
         departmentName: dept.name,
+        email: dept.email_id,
         total: deptTotal,
         used: deptUsed,
         unused: deptTotal - deptUsed

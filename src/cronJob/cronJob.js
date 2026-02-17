@@ -20,14 +20,14 @@ const sendRenewalNotifications = async () => {
                 where: {
                     // contractType: { [Op.in]: contractType }, 
                     endDate: {
-                        [Op.lte]: new Date(Date.now() + remindBeforeDays * 24 * 60 * 60 * 1000), 
+                        [Op.lte]: new Date(Date.now() + remindBeforeDays * 24 * 60 * 60 * 1000),
                     },
                 },
             });
 
             for (const c of contracts) {
                 const customizedEmailBody = emailBody
-                    .replace('[Recipient]', 'User') 
+                    .replace('[Recipient]', 'User')
                     .replace('[Contract Type]', c.contractType);
 
                 // Send email

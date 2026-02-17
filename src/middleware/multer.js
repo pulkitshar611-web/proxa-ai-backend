@@ -25,9 +25,14 @@ const fileStorage = multer.diskStorage({
       case "customAgreementFile":
         uploadPath = path.join(__dirname, "../../public/customAgreementFile");
         break;
-      // case "exercise_image":
-      //   uploadPath = path.join(__dirname, "../../public/exercise_image");
-      //   break;
+      case "sowFiles":
+        uploadPath = path.join(__dirname, "../../public/sowFiles ");
+        break;
+
+      case "amendmentFiles":
+        uploadPath = path.join(__dirname, "../../public/amendmentFiles");
+        break;
+
       default:
         console.log(`multer problem ${file.fieldname}`);
         return cb(new Error("Invalid fieldname"));

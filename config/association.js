@@ -320,6 +320,16 @@ module.exports = (db) => {
         foreignKey: 'user_id',
         as: 'user',
     });
+
+    // ================ SUPPLIER PERFORMANCE ASSOCIATION ================
+    db.supplier_performance.belongsTo(db.supplier, {
+        foreignKey: "supplierId",
+        as: "supplier",
+    });
+    db.supplier.hasMany(db.supplier_performance, {
+        foreignKey: "supplierId",
+        as: "performance",
+    });
 };
 
 
